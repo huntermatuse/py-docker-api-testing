@@ -40,7 +40,6 @@ class SQLServerContainer:
                 "mcr.microsoft.com/mssql/server:2019-latest",
                 detach=True,
                 name=self.container_name,
-                auto_remove=True,
                 environment={
                     "ACCEPT_EULA": "Y",
                     "SA_PASSWORD": self.password
@@ -200,3 +199,122 @@ class MqttContainer:
         except Exception as e:
             self.logger.error(f"Unexpected error: {e}")
             return False
+        
+    def stop(self):
+        """Stop the container"""
+        try:
+            if not self.container and self.client:
+                try:
+                    self.container = self.client.containers.get(self.container_name)
+                except docker.errors.NotFound:
+                    self.logger.warning(f"Container '{self.container_name}' not found.")
+                    return False
+            
+            if self.container:
+                self.logger.info(f"Stopping container '{self.container_name}'...")
+                self.container.stop()
+                self.container.remove()
+                self.logger.info("Container stopped and removed successfully.")
+                self.container = None
+                return True
+            else:
+                self.logger.warning("No container instance found to stop.")
+                return False
+                
+        except docker.errors.APIError as e:
+            self.logger.error(f"Docker API error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error: {e}")
+            return False
+        
+    def stop(self):
+        """Stop the container"""
+        try:
+            if not self.container and self.client:
+                try:
+                    self.container = self.client.containers.get(self.container_name)
+                except docker.errors.NotFound:
+                    self.logger.warning(f"Container '{self.container_name}' not found.")
+                    return False
+            
+            if self.container:
+                self.logger.info(f"Stopping container '{self.container_name}'...")
+                self.container.stop()
+                self.container.remove()
+                self.logger.info("Container stopped and removed successfully.")
+                self.container = None
+                return True
+            else:
+                self.logger.warning("No container instance found to stop.")
+                return False
+                
+        except docker.errors.APIError as e:
+            self.logger.error(f"Docker API error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error: {e}")
+            return False   
+        
+    def is_running(self):
+        """Check if container is running"""
+        try:
+            if self.container:
+                self.container.reload()
+                return self.container.status == "running"
+            elif self.client:
+                try:
+                    container = self.client.containers.get(self.container_name)
+                    return container.status == "running"
+                except docker.errors.NotFound:
+                    return False
+            return False
+        except Exception as e:
+            self.logger.error(f"Error checking status: {e}")
+            return False
+        
+    def get_logs(self, tail=100):
+        """Get container logs"""
+        try:
+            if not self.container and self.client:
+                self.container = self.client.containers.get(self.container_name)
+            
+            if self.container:
+                return self.container.logs(tail=tail).decode('utf-8')
+            else:
+                return None
+        except Exception as e:
+            self.logger.error(f"Error getting logs: {e}")
+            return None
+
+    def pull_image(self):
+        """Pull the MQTT image"""
+        try:
+            if not self.client:
+                self.client = docker.from_env()
+            
+            self.logger.info(f"Pulling image: {self.image}")
+            self.client.images.pull(self.image)
+            self.logger.info("Image pulled successfully.")
+            return True
+        except docker.errors.APIError as e:
+            self.logger.error(f"Docker API error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error: {e}")
+            return False
+    
+    def cleanup(self):
+        """Cleanup method called on exit"""
+        if self.is_running():
+            self.logger.info("Cleaning up MQTT container...")
+            self.stop()
+    
+    def __enter__(self):
+        """Context manager support"""
+        self.start()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager support"""
+        self.stop()
