@@ -1,6 +1,5 @@
 import docker
 import time
-import subprocess
 import atexit
 
 
@@ -124,18 +123,5 @@ class SQLServerContainer:
         self.stop()
 
 
-if __name__ == "__main__":
-    sql_server = SQLServerContainer()
-    sql_server.start_with_docker_sdk()
-    
-    time.sleep(5)
-    
-    print(f"Container running: {sql_server.is_running()}")
-    
-    logs = sql_server.get_logs(tail=20)
-    if logs:
-        print("Container logs:")
-        print(logs)
-    
-    sql_server.stop()
-    
+class MqttContainer:
+    pass
