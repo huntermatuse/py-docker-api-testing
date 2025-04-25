@@ -1,6 +1,7 @@
 import docker
 import time
 import atexit
+import logging
 
 
 class SQLServerContainer:
@@ -10,6 +11,8 @@ class SQLServerContainer:
         self.container_name = container_name
         self.container = None
         self.client = None
+
+        self.logger = logging.getLogger(__name__)
         
         atexit.register(self.cleanup)
     
@@ -22,16 +25,16 @@ class SQLServerContainer:
             try:
                 existing = self.client.containers.get(self.container_name)
                 if existing.status == "running":
-                    print(f"Container '{self.container_name}' is already running.")
+                    self.logger.info(f"Container '{self.container_name}' is already running.")
                     self.container = existing
                     return True
                 else:
-                    print(f"Removing existing container '{self.container_name}'...")
+                    self.logger.info(f"Removing existing container '{self.container_name}'...")
                     existing.remove(force=True)
             except docker.errors.NotFound:
                 pass
             
-            print(f"Starting SQL Server container '{self.container_name}'...")
+            self.logger.info(f"Starting SQL Server container '{self.container_name}'...")
             
             self.container = self.client.containers.run(
                 "mcr.microsoft.com/mssql/server:2019-latest",
@@ -44,43 +47,43 @@ class SQLServerContainer:
                 ports={"1433/tcp": self.port}
             )
             
-            print(f"Container started with ID: {self.container.id[:12]}")
+            self.logger.info(f"Container started with ID: {self.container.id[:12]}")
             
-            print("Waiting for SQL Server to be ready...")
+            self.logger.info("Waiting for SQL Server to be ready...")
             time.sleep(10)
             
             self.container.reload()
             if self.container.status == "running":
-                print("SQL Server container is running successfully!")
+                self.logger.info("SQL Server container is running successfully!")
                 return True
             else:
-                print(f"Container status: {self.container.status}")
+                self.logger.error(f"Container status: {self.container.status}")
                 return False
                 
         except docker.errors.APIError as e:
-            print(f"Docker API error: {e}")
+            self.logger.error(f"Docker API error: {e}")
             return False
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            self.logger.error(f"Unexpected error: {e}")
             return False
     
     def stop(self):
         """Stop the container"""
         try:
             if self.container and self.client:
-                print(f"Stopping container '{self.container_name}'...")
+                self.logger.info(f"Stopping container '{self.container_name}'...")
                 self.container.stop()
                 self.container.remove()
-                print("Container stopped and removed successfully.")
+                self.logger.info("Container stopped and removed successfully.")
             
             self.container = None
             return True
     
         except docker.errors.NotFound:
-            print(f"Container '{self.container_name}' not found.")
+            self.logger.error(f"Container '{self.container_name}' not found.")
             return False
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            self.logger.error(f"Unexpected error: {e}")
             return False
     
     def restart(self):
@@ -104,13 +107,13 @@ class SQLServerContainer:
             if self.container and self.client:
                 return self.container.logs(tail=tail).decode('utf-8')
         except Exception as e:
-            print(f"Error getting logs: {e}")
+            self.logger.error(f"Error getting logs: {e}")
             return None
     
     def cleanup(self):
         """Cleanup method called on exit"""
         if self.is_running():
-            print("Cleaning up SQL Server container...")
+            self.logger.info("Cleaning up SQL Server container...")
             self.stop()
     
     def __enter__(self):
