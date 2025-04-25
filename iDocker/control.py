@@ -40,6 +40,7 @@ class SQLServerContainer:
                 "mcr.microsoft.com/mssql/server:2019-latest",
                 detach=True,
                 name=self.container_name,
+                auto_remove=True,
                 environment={
                     "ACCEPT_EULA": "Y",
                     "SA_PASSWORD": self.password
@@ -127,4 +128,75 @@ class SQLServerContainer:
 
 
 class MqttContainer:
-    pass
+    def __init__(self, 
+                 port=1883, 
+                 websocket_port=9001, 
+                 container_name="mosquitto-mqtt",
+                 image="eclipse-mosquitto:latest",
+                 config_file=None,
+                 persistence_location=None):
+        self.port = port
+        self.websocket_port = websocket_port
+        self.container_name = container_name
+        self.image = image
+        self.config_file = config_file
+        self.persistence_location = persistence_location
+        self.container = None
+        self.client = None
+        
+        self.logger = logging.getLogger(__name__)
+        
+        atexit.register(self.cleanup)
+
+    def start(self):
+        """Start the MQTT container"""
+        try:
+            if not self.client:
+                self.client = docker.from_env()
+            
+            try:
+                existing = self.client.containers.get(self.container_name)
+                if existing.status == "running":
+                    self.logger.info(f"Container '{self.container_name}' is already running.")
+                    self.container = existing
+                    return True
+                else:
+                    self.logger.info(f"Removing existing container '{self.container_name}'...")
+                    existing.remove(force=True)
+            except docker.errors.NotFound:
+                pass
+            
+            self.logger.info(f"Starting MQTT container '{self.container_name}'...")
+            
+            container_config = {
+                "image": self.image,
+                "name": self.container_name,
+                "detach": True,
+                "ports": {
+                    "1883/tcp": self.port,
+                    "9001/tcp": self.websocket_port
+                }
+            }
+
+            self.container = self.client.containers.run(**container_config)
+                
+            self.logger.info(f"Container started with ID: {self.container.id[:12]}")
+            
+            self.logger.info("Waiting for MQTT broker to be ready...")
+            time.sleep(3)
+            
+            self.container.reload()
+            if self.container.status == "running":
+                self.logger.info("MQTT container is running successfully!")
+                self.logger.info(f"MQTT port: {self.port}, WebSocket port: {self.websocket_port}")
+                return True
+            else:
+                self.logger.error(f"Container status: {self.container.status}")
+                return False
+                
+        except docker.errors.APIError as e:
+            self.logger.error(f"Docker API error: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Unexpected error: {e}")
+            return False
